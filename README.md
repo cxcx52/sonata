@@ -54,3 +54,5 @@ Run `python -m unittest discover -s tests/python` to check the Python coordinate
 Building on CauchyFold and an unpublished internal study of knowledge extraction, Sonata combines pending-residual folding with a two-point extractor.
 
 The original CauchyFold code, parameters, paper citation and MIT license are preserved together. To reproduce its results, start in [archive/cauchyfold](archive/cauchyfold/README.md).
+
+I would be grateful to anyone who helps carry out the remaining experiments or shares feedback on Sonata.
