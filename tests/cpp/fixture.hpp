@@ -218,10 +218,10 @@ struct Fixture {
     return t;
   }
 };
-static Transcript prove(std::vector<E> a, E claim, U seed,
-                        bool compact = false) {
+template <typename ReceiveRound>
+static Transcript prove_rounds(std::vector<E> a, E claim, bool compact,
+                               ReceiveRound receive_round) {
   Transcript tr;
-  std::mt19937_64 rng(seed);
   size_t P = 1;
   while (P < a.size())
     P *= 2;
@@ -238,7 +238,7 @@ static Transcript prove(std::vector<E> a, E claim, U seed,
       tr.squares += 2;
     }
     E g1 = es(es(claim, sc(g0, 2)), g2);
-    E r = randomE(rng); // test coins; sampled only after round coefficients
+    E r = receive_round(g0, g2);
     tr.g0.push_back(g0);
     tr.g2.push_back(g2);
     tr.ch.push_back(r);
@@ -254,6 +254,11 @@ static Transcript prove(std::vector<E> a, E claim, U seed,
   check(sq(tr.terminal) == claim, "prover's terminal claim");
   tr.mults = tr.squares + tr.foldmults;
   return tr;
+}
+static Transcript prove(std::vector<E> a, E claim, U seed, bool compact = false) {
+  std::mt19937_64 rng(seed);
+  return prove_rounds(std::move(a), claim, compact,
+                      [&](E, E) { return randomE(rng); });
 }
 static U randomQ(std::mt19937_64 &r) {
   U x;

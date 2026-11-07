@@ -45,6 +45,27 @@ The [four-input example](tests/cpp/pending_child.cpp) follows one pending transi
 
 To reproduce the eight-transition comparison, run `./build/sonata_epoch --target` for the window and `./build/sonata_epoch --target-sequential` for the eight separate certifications. Both commands check the frontend through its root equations. Use `--target-direct` to exercise the window variant that eliminates the pending equations when consecutive public pending values agree.
 
+### Manual end-to-end example
+
+The [full-profile example](examples/end_to_end.cpp) starts from a trusted fixture state and constructs eight linked transitions containing 994 fresh instances. The initial and final pending values are zero. It freezes the window, runs the field Sumcheck, and passes the resulting root and opening through four recursive reductions and the terminal pivot. A separate verifier reconstructs the backend relations from the public root, messages, and its saved challenges. It checks the honest pivot, then changes one commitment coefficient and checks for rejection. The fixture uses deterministic verifier coins for reproducibility.
+
+Compile the example on 64-bit Linux or WSL with the following commands.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target sonata_e2e
+```
+
+The target is excluded from the default build and CTest. The root projection alone stores 384 × 3,635,520 one-byte coefficients (1.30 GiB). Allow additional memory for the witness, commitments, and aggregation. Peak memory and elapsed time for the full run have yet to be measured.
+
+On a machine reserved for the full run, start the [Python driver](examples/run_e2e.py) from the repository root. It supplies the spectrally filtered ring challenges to the C++ executable.
+
+```sh
+python3 examples/run_e2e.py ./build/sonata_e2e --run-full
+```
+
+Success requires exit status zero and the final line `PASS: checkpoint verified through five layers and altered pivot rejected`. This exercises one honest interactive execution and one tampered terminal message. Knowledge extraction has a separate parameter ledger and local tests.
+
 ## Code
 
 | Component | Entry point |

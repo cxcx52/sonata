@@ -23,3 +23,8 @@ if(BUILD_TESTING)
     add_test(NAME ${probe} COMMAND sonata_${probe})
   endforeach()
 endif()
+
+# Manual full-profile run. Building this target only compiles and links it.
+add_executable(sonata_e2e EXCLUDE_FROM_ALL examples/end_to_end.cpp)
+target_include_directories(sonata_e2e PRIVATE tests/cpp)
+target_link_libraries(sonata_e2e PRIVATE sonata)
