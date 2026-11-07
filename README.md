@@ -49,6 +49,8 @@ The [four-input example](tests/cpp/pending_child.cpp) follows one pending transi
 
 Run `python -m unittest discover -s tests/python` to check the Python coordinate routines.
 
-## CauchyFold
+## Origins
 
-Sonata builds on CauchyFold and Palimpsest. The original CauchyFold code, parameters, paper citation and MIT license are preserved together. To reproduce its results, start in [archive/cauchyfold](archive/cauchyfold/README.md).
+Building on CauchyFold and an unpublished internal study of knowledge extraction, Sonata combines pending-residual folding with a two-point extractor.
+
+The original CauchyFold code, parameters, paper citation and MIT license are preserved together. To reproduce its results, start in [archive/cauchyfold](archive/cauchyfold/README.md).
