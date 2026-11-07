@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.16)
+project(Sonata LANGUAGES CXX)
+
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("int main() { __uint128_t x=1; return __builtin_parityll(x); }" SONATA_WIDE_ARITHMETIC)
+if(NOT SONATA_WIDE_ARITHMETIC)
+  message(FATAL_ERROR "Use GCC or Clang with native 128-bit integer support.")
+endif()
+
+add_library(sonata INTERFACE)
+target_include_directories(sonata INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(sonata INTERFACE cxx_std_17)
+
+include(CTest)
+if(BUILD_TESTING)
+  foreach(probe IN ITEMS handoff layer pending_child)
+    add_executable(sonata_${probe} tests/cpp/${probe}.cpp)
+    target_link_libraries(sonata_${probe} PRIVATE sonata)
+    add_test(NAME ${probe} COMMAND sonata_${probe})
+  endforeach()
+endif()
