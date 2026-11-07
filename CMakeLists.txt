@@ -28,3 +28,11 @@ endif()
 add_executable(sonata_e2e EXCLUDE_FROM_ALL examples/end_to_end.cpp)
 target_include_directories(sonata_e2e PRIVATE tests/cpp)
 target_link_libraries(sonata_e2e PRIVATE sonata)
+
+add_executable(sonata_interactive EXCLUDE_FROM_ALL examples/interactive.cpp)
+target_include_directories(sonata_interactive PRIVATE tests/cpp)
+target_link_libraries(sonata_interactive PRIVATE sonata)
+
+add_executable(sonata_bench EXCLUDE_FROM_ALL benchmarks/components.cpp)
+target_include_directories(sonata_bench PRIVATE tests/cpp)
+target_link_libraries(sonata_bench PRIVATE sonata)

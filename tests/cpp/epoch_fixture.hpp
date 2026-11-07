@@ -148,6 +148,37 @@ inline std::vector<int> target_window_arities() {
   return {125, 125, 124, 124, 124, 124, 124, 124};
 }
 
+inline ep::Object commit_state(const Key& st, const State& s) {
+  ep::Object o;
+  std::copy_n(s.begin(), 5, o.pub.begin());
+  RV v(219);
+  for (size_t a = 0; a < 73; ++a)
+    for (size_t t = 0; t < 4; ++t)
+      for (size_t j = 0; j < 48; ++j)
+        put(v, 192 * a + 48 * t + j, (s[a][t] >> j) & 1);
+  o.commitment = st.apply(v);
+  return o;
+}
+
+inline RV window_witness(const ep::Frozen& f, const std::vector<State>& objects) {
+  const auto l = ep::layout(f);
+  RV w((l.raw() + 63) / 64);
+  size_t g = 0;
+  for (size_t i = 0; i < objects.size(); ++i) {
+    bool fresh = i >= f.states.size();
+    for (size_t a = 5; a < (fresh ? 69u : 73u); ++a)
+      for (size_t t = 0; t < (fresh ? 1u : 4u); ++t) {
+        const auto group = canonical_group(objects[i][a][t]);
+        size_t p = 55 * g++;
+        for (size_t j = 0; j < group.size(); ++j)
+          put(w, p + j, group[j]);
+      }
+  }
+  check(g == l.groups, "canonical group count");
+  put(w, l.raw() - 1, 1);
+  return w;
+}
+
 // The history and its public anchor are reproducible inputs to certification.
 inline WindowOpening make_window_opening(std::shared_ptr<const Master> master,
                                          const std::vector<int>& arities,
@@ -156,17 +187,6 @@ inline WindowOpening make_window_opening(std::shared_ptr<const Master> master,
   ep::Frozen f;
   f.pending.push_back(initial_pending);
   std::vector<State> objects, sources;
-  auto object = [&](const State &s) {
-    ep::Object o;
-    std::copy_n(s.begin(), 5, o.pub.begin());
-    RV v(219);
-    for (size_t a = 0; a < 73; ++a)
-      for (size_t t = 0; t < 4; ++t)
-        for (size_t j = 0; j < 48; ++j)
-          put(v, 192 * a + 48 * t + j, (s[a][t] >> j) & 1);
-    o.commitment = st.apply(v);
-    return o;
-  };
   for (size_t i = 0; i < arities.size(); ++i) {
     Fixture inst(arities[i], 73 + 10 * i, false, i ? &objects.back() : nullptr);
     if (i == 0)
@@ -177,37 +197,17 @@ inline WindowOpening make_window_opening(std::shared_ptr<const Master> master,
     step.gamma = inst.gamma;
     for (int j = 1; j <= inst.k; ++j) {
       sources.push_back(inst.states[j]);
-      step.sources.push_back(object(inst.states[j]));
+      step.sources.push_back(commit_state(st, inst.states[j]));
     }
     check(inst.invalid_sources == 0 && inst.pending == zero, "expected valid source data");
     f.pending.push_back(ea(f.pending.back(), inst.pending));
     f.steps.push_back(std::move(step));
   }
   for (const auto &s : objects)
-    f.states.push_back(object(s));
+    f.states.push_back(commit_state(st, s));
   objects.insert(objects.end(), sources.begin(), sources.end());
   f.aux_commitment.resize(4);
-  const auto l = ep::layout(f);
-  RV w((l.raw() + 63) / 64);
-  size_t g = 0;
-  for (size_t i = 0; i < objects.size(); ++i) {
-    bool fresh = i >= f.states.size();
-    for (size_t a = 5; a < (fresh ? 69u : 73u); ++a)
-      for (size_t t = 0; t < (fresh ? 1u : 4u); ++t) {
-        U v = objects[i][a][t];
-        size_t p = 55 * g++;
-        for (size_t j = 0; j < 48; ++j)
-          put(w, p + j, (v >> j) & 1);
-        int z = 42 - __builtin_popcountll(v >> 6), e = z == 0;
-        int mask = helper_mask((z - 1 + e) / 2);
-        for (int j = 0; j < 5; ++j)
-          put(w, p + 48 + j, (mask >> j) & 1);
-        put(w, p + 53, e);
-        put(w, p + 54, e * ((v >> 2) & 1));
-      }
-  }
-  check(g == l.groups, "canonical group count");
-  put(w, l.raw() - 1, 1);
+  auto w = window_witness(f, objects);
   return {std::move(f), std::move(w)};
 }
 

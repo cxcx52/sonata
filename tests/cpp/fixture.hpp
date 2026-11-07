@@ -1,4 +1,5 @@
 #pragma once
+#include "sonata/encoding.hpp"
 #include "sonata/frontend.hpp"
 #include <random>
 namespace sonata::fixture {
@@ -8,21 +9,23 @@ static E randomE(std::mt19937_64 &r) {
     v = r() % q;
   return a;
 }
-static int helper_mask(int t) {
-  int best = -1;
-  for (int mask = 0; mask < 32; mask++) {
-    int v = 0;
-    for (int j = 0; j < 5; j++)
-      if ((mask >> j) & 1)
-        v += HWEIGHTS[j];
-    if (v == t && (best < 0 || __builtin_popcount(unsigned(mask)) <
-                                   __builtin_popcount(unsigned(best))))
-      best = mask;
-  }
-  check(best >= 0, "aux count representability");
-  return best;
-}
 using State = std::array<E, 73>;
+inline State input_state(std::mt19937_64& rng, bool fresh) {
+  State v{};
+  v[0] = fresh ? one : randomE(rng);
+  for (int j = 0; j < 4; j++) {
+    E d{};
+    for (int l = 0; l < 8; l++) {
+      int a = 5 + 16 * j + 2 * l;
+      v[a] = fresh ? E{rng() % q, 0, 0, 0} : randomE(rng);
+      v[a + 1] = fresh ? E{rng() % q, 0, 0, 0} : randomE(rng);
+      d = ea(d, em(v[a], v[a + 1]));
+    }
+    v[1 + j] = fresh ? d : randomE(rng);
+    v[69 + j] = es(d, em(v[0], v[1 + j]));
+  }
+  return v;
+}
 struct Product {
   E w;
   int sa, ca, sb, cb;
@@ -47,21 +50,8 @@ struct Fixture {
     for (auto &a : gmap)
       a.fill(-1);
     std::mt19937_64 rng(seed);
-    for (int s = 0; s <= k; s++) {
-      auto &v = states[s];
-      v[0] = s ? one : randomE(rng);
-      for (int j = 0; j < 4; j++) {
-        E d{};
-        for (int l = 0; l < 8; l++) {
-          int a = 5 + 16 * j + 2 * l;
-          v[a] = s ? E{rng() % q, 0, 0, 0} : randomE(rng);
-          v[a + 1] = s ? E{rng() % q, 0, 0, 0} : randomE(rng);
-          d = ea(d, em(v[a], v[a + 1]));
-        }
-        v[1 + j] = s ? d : randomE(rng);
-        v[69 + j] = es(d, em(v[0], v[1 + j]));
-      }
-    }
+    for (int s = 0; s <= k; ++s)
+      states[s] = input_state(rng, s != 0);
     // Reuse the previous node's exact output state, rather than another random
     // state.
     if (old_state)
@@ -108,17 +98,8 @@ struct Fixture {
           "public-specialized coefficient count");
     bits.resize(55 * scalarvalues.size());
     for (size_t g = 0; g < scalarvalues.size(); g++) {
-      U x = scalarvalues[g];
-      auto b = bits.data() + 55 * g;
-      for (int j = 0; j < 48; j++)
-        b[j] = (x >> j) & 1;
-      int z = 42 - __builtin_popcountll(x >> 6), e = z == 0,
-          t = (z - 1 + e) / 2;
-      int mask = helper_mask(t);
-      for (int j = 0; j < 5; j++)
-        b[48 + j] = (mask >> j) & 1;
-      b[53] = e;
-      b[54] = e * b[2];
+      auto group = canonical_group(scalarvalues[g]);
+      std::copy(group.begin(), group.end(), bits.begin() + 55 * g);
     }
     // Challenge chronology: source commitments -> gamma -> pending claim ->
     // rho, eta. A real adversarial-security proof must bind source openings

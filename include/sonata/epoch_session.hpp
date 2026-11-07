@@ -30,6 +30,7 @@ class FieldSession {
   AttemptMeter& meter_;
   std::function<uint64_t()> word_;
   std::shared_ptr<const Master> crs_;
+  const size_t aux_columns_;
   size_t rounds_ = 0;
   E rho_{}, eta_{};
   Transcript transcript_;
@@ -45,12 +46,15 @@ class FieldSession {
 public:
   // word must supply independent uniform 64-bit words in the interactive model.
   FieldSession(const Frozen& frozen, bool direct, AttemptMeter& meter,
-               std::function<uint64_t()> word, std::shared_ptr<const Master> crs)
+               std::function<uint64_t()> word, std::shared_ptr<const Master> crs,
+               size_t aux_columns = 7228)
     : log_(frozen), direct_(direct), meter_(meter), word_(std::move(word)),
-      crs_(std::move(crs)) {
+      crs_(std::move(crs)), aux_columns_(aux_columns) {
     auto l = layout(log_);
     check(l.groups <= 66080 && crs_ && crs_->data.size()==44352,
           "epoch outside fixed five-layer profile");
+    check(aux_columns_ >= (7*l.groups+63)/64 && aux_columns_ <= 7228,
+          "invalid pre-batch auxiliary width");
     if (direct_)
       for (size_t t=1; t<log_.pending.size(); ++t)
         check(log_.pending[t]==log_.pending[t-1],"direct pending continuity");
@@ -82,13 +86,20 @@ public:
     return coin;
   }
 
-  System submit_terminal(E endpoint) {
+  // Close the field exchange and return the logical root for a trusted
+  // backend profile. Its auxiliary key must match the committed opening.
+  System submit_active_terminal(E endpoint) {
     check(phase_==Phase::field,"terminal outside live field phase");
     phase_=Phase::closed;
     check(transcript_.ch.size()==rounds_,"incomplete sumcheck");
     transcript_.terminal=endpoint;
+    return initialsystem(log_,rho_,eta_,transcript_,crs_,aux_columns_,direct_);
+  }
+
+  System submit_terminal(E endpoint) {
+    check(aux_columns_ == 7228,"fixed backend auxiliary width");
     const Config cfg{21,2705,64,3634401,3635520,3105761,795074815,1174,22};
-    auto active=initialsystem(log_,rho_,eta_,transcript_,crs_,7228,direct_);
+    auto active=submit_active_terminal(endpoint);
     return align(embed_prefix(std::move(active),cfg,264036),cfg);
   }
   void abort() { phase_=Phase::closed; }

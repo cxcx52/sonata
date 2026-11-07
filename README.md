@@ -25,6 +25,8 @@ Each command checks the full five-layer calculation against its committed JSON f
 
 Both variants use the same interactive messages. The terminal-call coefficient bounds work in the extractor. Concrete computational security also depends on the Module-SIS instances and the global extraction time limit.
 
+Run `python parameters/audit_profile.py` for an independent reconstruction of both ledgers, including the short-challenge support, balanced-digit norm bounds, six representative Module-SIS instances, and per-layer communication. The packed backend messages total 166,136 bytes with no retries. Settling the eight-step window below adds 3,192 bytes for the field exchange and auxiliary commitment when the verifier already holds the public log. These are encoding budgets.
+
 ## Checkpoint batching
 
 A verifier can freeze a window of consecutive transitions and submit one root statement to the backend. The [field session](include/sonata/epoch_session.hpp) takes its own copy of the window before issuing the batching challenges. The outer verifier supplies fresh randomness, shares the attempt budget across retries, and accepts the checkpoint only after the backend accepts the statement.
@@ -44,6 +46,30 @@ cmake -E chdir build ctest --output-on-failure
 The [four-input example](tests/cpp/pending_child.cpp) follows one pending transition through its four-coordinate child relation to the terminal pivot. Its fixtures use deterministic verifier challenges. Applications supply the common reference string and the verifier's challenges in protocol order.
 
 To reproduce the eight-transition comparison, run `./build/sonata_epoch --target` for the window and `./build/sonata_epoch --target-sequential` for the eight separate certifications. Both commands check the frontend through its root equations. Use `--target-direct` to exercise the window variant that eliminates the pending equations when consecutive public pending values agree.
+
+### Small live verifier
+
+The [live example](examples/interactive.cpp) certifies two consecutive steps containing one and two fresh instances. It runs the 16-round field Sumcheck, one recursive reduction and the terminal pivot. The verifier fixes the incoming commitments before drawing the fold challenges, generates each later challenge after its preceding message, and uses fresh operating-system randomness. The prover and verifier run in one process, with a Python worker supplying filtered short challenges to the verifier.
+
+```sh
+cmake --build build --target sonata_interactive
+python3 examples/run_interactive.py ./build/sonata_interactive
+```
+
+The run checks acceptance of an honest window and rejection of an altered auxiliary commitment, a committed source with a false residual, a fabricated intermediate pending value, a broken state link and an altered terminal response.
+
+### Component benchmarks
+
+Each value below comes from five fresh processes on one pinned logical CPU of an Intel Core i9-13980HX under Ubuntu 24.04 / WSL2. Time is the median for the listed batch. Memory is the maximum whole-process peak RSS, including input preparation and runtime overhead.
+
+| Operation | Measured input | Time (ms) | Peak RSS (MiB) |
+| --- | --- | ---: | ---: |
+| Canonical encoding into the opening | 66,064 field scalars | 4.073 | 31.28 |
+| Square Sumcheck prover on a prepared table | 44,386 entries, 16 rounds | 4.502 | 4.53 |
+| Seed expansion and projection of one vector | 384 × 44,160 | 799.013 | 19.53 |
+| Short-challenge sampling with exact spectral filtering | 21 rings of degree 64, prepared rank table | 11.704 | 19.31 |
+
+Build with `cmake --build build --target sonata_bench` and run `python3 benchmarks/run.py ./build/sonata_bench` on Linux with GNU time. The [benchmark driver](benchmarks/run.py) emits individual samples and the machine configuration as JSON.
 
 ### Manual end-to-end example
 

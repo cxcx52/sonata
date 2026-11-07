@@ -5,8 +5,8 @@
 
 namespace sonata::example {
 
-// run_e2e.py owns the deterministic verifier coins and checks spectral membership
-// with the reference sampler. The pipe carries signed coefficients for this demo.
+// The Python verifier samples from the spectral support. The pipe carries
+// signed coefficients of its challenge. The small live run uses OS randomness.
 inline RV draw_challenges(size_t blocks, bool terminal) {
   std::cout << "SONATA_DRAW " << blocks << ' ' << int(terminal) << std::endl;
   RV challenges(blocks);
@@ -14,7 +14,7 @@ inline RV draw_challenges(size_t blocks, bool terminal) {
     unsigned squared_norm = 0;
     for (auto &coefficient : ring) {
       int value;
-      check(bool(std::cin >> value), "incomplete challenge from run_e2e.py");
+      check(bool(std::cin >> value), "incomplete challenge from verifier");
       check(value >= -11 && value <= 11, "short-challenge coefficient");
       squared_norm += value * value;
       coefficient = qm(value);
