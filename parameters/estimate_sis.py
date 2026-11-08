@@ -1,5 +1,6 @@
 """Reproduce coefficient-l2 Module-SIS attack screens with Sage and lattice-estimator."""
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -52,28 +53,16 @@ def one_factor_screen(a, b, radius, solve):
             return dict(status="GSA screen gives a finite fit", reduced_energy=budget,
                         reduced_radius=target, n=n, m=m, chosen_dimension=d,
                         bkz_block_size=block, classical_core_log2=log_cost)
-    return dict(status="no feasible GSA block size through 65536", reduced_energy=budget,
+    return dict(status=f"no feasible GSA block size through {min(m, 65536)}", reduced_energy=budget,
                 reduced_radius=target, n=n, m=m)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("estimator", type=Path, help="unmodified pinned lattice-estimator checkout")
-    parser.add_argument("ledger", type=Path, help="parameters/ledger-two-point.json or parameter-audit.json")
-    args = parser.parse_args()
-    root = args.estimator.resolve()
-    git = ["git", "-c", "safe.directory=" + str(root), "-c", "core.filemode=false",
-           "-c", "core.autocrlf=true", "-C", str(root)]
-    revision = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
-    tracked = subprocess.check_output(git + ["status", "--porcelain", "-uno"], text=True).strip()
-    if revision != PIN or tracked:
-        raise ValueError("estimator checkout must be clean and pinned at " + PIN)
-    sys.path.insert(0, str(root))
+def estimate_profile(ledger):
     from sage.all import log, oo, sqrt, ZZ
-    from sage.version import version
     from estimator import SIS
     from estimator.reduction import ADPS16, MATZOV
     from estimator.sis_lattice import SISLattice
+
 
     models = {"core_classical": ADPS16("classical"), "core_quantum": ADPS16("quantum"),
               "matzov_classical": MATZOV(nn="classical"), "matzov_quantum_dw": MATZOV(nn="quantum")}
@@ -82,7 +71,6 @@ def main():
         cost = SISLattice.cost_euclidean(params, d=d, red_cost_model=models["core_classical"])
         return int(cost["beta"]), float(log(cost["rop"], 2))
 
-    ledger = json.loads(args.ledger.read_text(encoding="utf-8-sig"))
     if "representatives" in ledger:
         representatives = ledger["representatives"]
     else:
@@ -113,10 +101,69 @@ def main():
                              bkz_block_size=int(cost["beta"]), log2_cost=costs,
                              matzov_within_fit=int(cost["beta"]) <= 1024,
                              single_CRT_component=one_factor_screen(a, b, radius, solve_crt))
-    print(json.dumps(dict(estimator_commit=revision, sage_version=version, q=Q, degree=DEGREE,
-                          attack="generic coefficient-l2 q-ary SIS, Euclidean GSA",
-                          cost_units="ADPS16 Core-SVP exponents; MATZOV estimator rop / quantum DW cost",
-                          results=results), indent=2, allow_nan=False))
+    return results
+
+
+def check_sweep(profile, results, target):
+    embedding = profile["embedding"]
+    roles = {name: (a, b, radius) for name, a, b, radius in profile["roles"]}
+    if set(embedding) != set(roles) or set(embedding.values()) != set(results):
+        raise ValueError("incomplete assignment of role kernels")
+    for name, (a, b, radius) in roles.items():
+        g = results[embedding[name]]
+        if a != g["ring_rows"] or b > g["ring_columns"] or radius > g["l2_radius"]:
+            raise ValueError(f"{name}: invalid prefix or radius for representative")
+        if g["ring_rows"]*g["ring_columns"] > profile["flat_CRS_cells"]:
+            raise ValueError(f"{name}: representative prefix exceeds CRS length")
+    weakest = min(results, key=lambda role: results[role]["log2_cost"]["core_classical"])
+    row = results[weakest]
+    cmin = target["classical_core_svp_min"]
+    qmin = target["quantum_core_svp_sensitivity_min"]
+    for role, estimate in results.items():
+        costs = estimate["log2_cost"]
+        if costs["core_classical"] < cmin or costs["core_quantum"] < qmin:
+            raise ValueError(f"{role}: generic cost below design threshold")
+        crt = estimate["single_CRT_component"]
+        if "bkz_block_size" in crt:
+            if crt["classical_core_log2"] < cmin or 0.265*crt["bkz_block_size"] < qmin:
+                raise ValueError(f"{role}: single-component cost below design threshold")
+    return dict(weakest_generic_role=weakest, classical_core_log2=row["log2_cost"]["core_classical"],
+                quantum_core_sensitivity_log2=row["log2_cost"]["core_quantum"],
+                bkz_block_size=row["bkz_block_size"], assigned_roles=len(roles),
+                representative_checks=len(results))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("estimator", type=Path, help="unmodified pinned lattice-estimator checkout")
+    parser.add_argument("ledger", type=Path, help="single audited ledger or parameters/sweep-profiles.json")
+    args = parser.parse_args()
+    root = args.estimator.resolve()
+    git = ["git", "-c", "safe.directory=" + str(root), "-c", "core.filemode=false",
+           "-c", "core.autocrlf=true", "-C", str(root)]
+    revision = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
+    tracked = subprocess.check_output(git + ["status", "--porcelain", "-uno"], text=True).strip()
+    if revision != PIN or tracked:
+        raise ValueError("estimator checkout must be clean and pinned at " + PIN)
+    sys.path.insert(0, str(root))
+    from sage.version import version
+
+    ledger = json.loads(args.ledger.read_text(encoding="utf-8-sig"))
+    report = dict(estimator_commit=revision, sage_version=version, q=Q, degree=DEGREE,
+                  attack="generic coefficient-l2 q-ary SIS, Euclidean GSA",
+                  cost_units="ADPS16 Core-SVP exponents; MATZOV estimator rop / quantum DW cost")
+    if "profiles" in ledger:
+        report["profile_ledger_lf_sha256"] = hashlib.sha256(
+            args.ledger.read_text(encoding="utf-8-sig").encode("utf-8")).hexdigest()
+        report["targets"] = ledger["target"]
+        report["profiles"] = {}
+        for k, profile in ledger["profiles"].items():
+            results = estimate_profile(profile)
+            summary = check_sweep(profile, results, ledger["target"])
+            report["profiles"][k] = dict(results=results, summary=summary)
+    else:
+        report["results"] = estimate_profile(ledger)
+    print(json.dumps(report, indent=2, allow_nan=False))
 
 
 if __name__ == "__main__":

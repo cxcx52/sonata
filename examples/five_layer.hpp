@@ -22,6 +22,8 @@ using ChallengeSource = std::function<RV(size_t, bool)>;
 
 // The verifier retains its own coins for the one submitted path at each layer.
 struct LayerCoins {
+  std::vector<Bytes> skipped_seeds;
+  std::vector<RV> skipped_challenges;
   Bytes projection_seed;
   E zeta{};
   RV challenge;
@@ -31,6 +33,18 @@ struct LayerMessages {
   SV image;
   TerminalResponse pivot;
 };
+
+using LayerPath = std::array<Config, 5>;
+
+// Bill verifier challenge generation separately even inside the interactive prover.
+template<class F>
+inline auto account(double *seconds, F operation) {
+  if (!seconds) return operation();
+  const auto begin = std::chrono::steady_clock::now();
+  auto result = operation();
+  *seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+  return result;
+}
 
 inline Bytes projection_seed(const Config &cfg, const WordSource &word) {
   const size_t bits = cfg.b + cfg.h * (3 * cfg.b - 1);
@@ -52,25 +66,26 @@ inline E aggregation_coin(const WordSource &word) {
 
 inline Aggregated prove_projection(const Config &cfg, const System &system,
                                    const RV &w, const WordSource &word,
-                                   LayerCoins &coins, LayerMessages &msg) {
+                                   LayerCoins &coins, LayerMessages &msg, double *coin_seconds) {
   for (size_t i = 0; i < attempt_limit; ++i) {
-    coins.projection_seed = projection_seed(cfg, word);
+    coins.projection_seed = account(coin_seconds, [&]{ return projection_seed(cfg, word); });
     auto projection = expand_projection(cfg, coins.projection_seed);
     auto image = project(projection, w);
     if (proj_norm(image, cfg.S)) {
       std::cerr << "projection_attempts=" << i + 1 << '\n';
       msg.image = std::move(image);
-      coins.zeta = aggregation_coin(word);
+      coins.zeta = account(coin_seconds, [&]{ return aggregation_coin(word); });
       return aggregate(system, projection, msg.image, coins.zeta, one);
     }
+    coins.skipped_seeds.push_back(std::move(coins.projection_seed));
   }
   throw std::runtime_error("projection retry budget exhausted");
 }
 
 inline RV prove_response(const Config &cfg, const RV &w, const ChallengeSource &draw,
-                         LayerCoins &coins) {
+                         LayerCoins &coins, double *coin_seconds) {
   for (size_t i = 0; i < attempt_limit; ++i) {
-    coins.challenge = draw(cfg.s, cfg.rho == 0);
+    coins.challenge = account(coin_seconds, [&]{ return draw(cfg.s, cfg.rho == 0); });
     check(coins.challenge.size() == cfg.s, "short challenge block count");
     if (!cfg.rho)
       check(!rzero(coins.challenge.front()), "pivot challenge must be nonzero");
@@ -79,6 +94,7 @@ inline RV prove_response(const Config &cfg, const RV &w, const ChallengeSource &
       std::cerr << "short_challenge_attempts=" << i + 1 << '\n';
       return z;
     }
+    coins.skipped_challenges.push_back(std::move(coins.challenge));
   }
   throw std::runtime_error("short-response retry budget exhausted");
 }
@@ -111,11 +127,12 @@ inline RV child_opening(const RV &z, I radix, const RV &bt, const RV &bh) {
 }
 
 inline System next_system(size_t index, const LayerKeys &keys, Aggregated ag,
-                          const LayerMessages &msg, const LayerCoins &coins) {
-  auto child = childsystem({layers[index], keys.A, keys.B, keys.D, msg.u1, msg.u2,
+                          const LayerMessages &msg, const LayerCoins &coins,
+                          const LayerPath &path = layers) {
+  auto child = childsystem({path[index], keys.A, keys.B, keys.D, msg.u1, msg.u2,
                             coins.challenge, std::move(ag), keys.B.cols,
                             keys.D.cols, keys.ell});
-  const auto &next = layers.at(index + 1);
+  const auto &next = path.at(index + 1);
   check(child.raw == next.raw, "profile child length");
   if (next.raw == next.N)
     return child;
@@ -125,13 +142,14 @@ inline System next_system(size_t index, const LayerKeys &keys, Aggregated ag,
 inline void prove_layers(System sys, RV w, const std::shared_ptr<const Master> &crs,
                          const WordSource &word, const ChallengeSource &draw,
                          std::array<LayerMessages, 5> &proof,
-                         std::array<LayerCoins, 5> &tape) {
+                         std::array<LayerCoins, 5> &tape,
+                         const LayerPath &path = layers, double *coin_seconds = nullptr) {
   Key pivot_key{crs, 2, 256};
-  for (size_t i = 0; i < layers.size(); ++i) {
-    const auto &cfg = layers[i];
+  for (size_t i = 0; i < path.size(); ++i) {
+    const auto &cfg = path[i];
     auto &msg = proof[i];
     auto &coins = tape[i];
-    std::cerr << "Proving backend layer " << i + 1 << '/' << layers.size() << '\n';
+    std::cerr << "Proving backend layer " << i + 1 << '/' << path.size() << '\n';
     check(w.size() == cfg.N / degree && sys.raw == cfg.N, "aligned prover dimensions");
     check(energy(w) <= cfg.S && sys.apply(w) == sys.y, "parent witness relation");
     LayerKeys keys(cfg, crs);
@@ -147,23 +165,23 @@ inline void prove_layers(System sys, RV w, const std::shared_ptr<const Master> &
       msg.pivot.pivot = pivot_key.apply(digits(slice(tags, 0, keys.A.rows), 8, 16));
       msg.pivot.tothers.assign(tags.begin() + keys.A.rows, tags.end());
     }
-    auto ag = prove_projection(cfg, sys, w, word, coins, msg);
+    auto ag = prove_projection(cfg, sys, w, word, coins, msg, coin_seconds);
     auto h = symmetric(ag, w, cfg.s, cfg.n);
     if (!cfg.rho) {
       msg.pivot.h = std::move(h);
       const size_t triangle = cfg.s * (cfg.s + 1) / 2;
       for (size_t e = 0; e < 4; ++e)
         msg.pivot.h[e * triangle][0] = 0;
-      msg.pivot.z = prove_response(cfg, w, draw, coins);
+      msg.pivot.z = prove_response(cfg, w, draw, coins, coin_seconds);
       return;
     }
     auto bh = digits(h, cfg.rho, keys.ell);
     msg.u2 = keys.D.apply(bh);
-    auto z = prove_response(cfg, w, draw, coins);
+    auto z = prove_response(cfg, w, draw, coins, coin_seconds);
     w = child_opening(z, cfg.rho, bt, bh);
-    sys = next_system(i, keys, std::move(ag), msg, coins);
-    check(w.size() * degree == layers[i + 1].raw, "child opening dimensions");
-    w.resize(layers[i + 1].N / degree);
+    sys = next_system(i, keys, std::move(ag), msg, coins, path);
+    check(w.size() * degree == path[i + 1].raw, "child opening dimensions");
+    w.resize(path[i + 1].N / degree);
   }
 }
 
@@ -177,10 +195,11 @@ inline void check_canonical_rings(const RV &rings) {
 // prover's messages. No opening or prover-computed aggregate crosses this API.
 inline void verify_layers(System sys, const std::shared_ptr<const Master> &crs,
                           const std::array<LayerMessages, 5> &proof,
-                          const std::array<LayerCoins, 5> &tape) {
-  for (size_t i = 0; i < layers.size(); ++i) {
-    std::cerr << "Verifying backend layer " << i + 1 << '/' << layers.size() << '\n';
-    const auto &cfg = layers[i];
+                          const std::array<LayerCoins, 5> &tape,
+                          const LayerPath &path = layers, double *tamper_seconds = nullptr) {
+  for (size_t i = 0; i < path.size(); ++i) {
+    std::cerr << "Verifying backend layer " << i + 1 << '/' << path.size() << '\n';
+    const auto &cfg = path[i];
     const auto &msg = proof[i];
     const auto &coins = tape[i];
     check(std::all_of(msg.image.begin(), msg.image.end(), [](U v) { return v < q; }),
@@ -194,7 +213,7 @@ inline void verify_layers(System sys, const std::shared_ptr<const Master> &crs,
                 msg.pivot.h.empty() && msg.pivot.z.empty(), "unexpected pivot fields");
       check_canonical_rings(msg.u1);
       check_canonical_rings(msg.u2);
-      sys = next_system(i, keys, std::move(ag), msg, coins);
+      sys = next_system(i, keys, std::move(ag), msg, coins, path);
     } else {
       check(msg.u1.empty() && msg.u2.empty(), "unexpected child commitments");
       for (const auto *field : {&msg.pivot.pivot, &msg.pivot.tothers,
@@ -202,6 +221,7 @@ inline void verify_layers(System sys, const std::shared_ptr<const Master> &crs,
         check_canonical_rings(*field);
       const Key pivot_key{crs, 2, 256};
       verifyterminal(cfg, keys.A, pivot_key, ag, msg.pivot, coins.challenge);
+      const auto tamper_start = std::chrono::steady_clock::now();
       auto altered = msg.pivot;
       altered.pivot[0][0] = add(altered.pivot[0][0], 1);
       try {
@@ -209,6 +229,8 @@ inline void verify_layers(System sys, const std::shared_ptr<const Master> &crs,
       } catch (const std::runtime_error &e) {
         if (std::string_view(e.what()) != "pivot binding equation")
           throw;
+        if (tamper_seconds)
+          *tamper_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now()-tamper_start).count();
         return;
       }
       throw std::runtime_error("verifier accepted the altered pivot commitment");
