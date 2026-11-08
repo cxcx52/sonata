@@ -1,4 +1,4 @@
-"""Run each audited arity and the original 1024 control in identical three-core waves."""
+"""Run the four optimized arities in identical three-core waves."""
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -40,8 +40,8 @@ def main():
                     topology=topology, binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                     schedule="3 simultaneous trials per wave; wait for all before next wave")
     (out/"machine.json").write_text(json.dumps(manifest, indent=2)+"\n")
-    for name,k,reference in [("k16",16,False),("k64",64,False),("k256",256,False),
-                             ("k1024",1024,False),("reference1024",1024,True)]:
+    for k in (16,64,256,1024):
+        name = f"k{k}"
         children = []
         start = time.monotonic()
         print(f"START {name} {datetime.now(timezone.utc).isoformat()}",flush=True)
@@ -50,8 +50,6 @@ def main():
                 path = out / f"{name}-r{i}"
                 cmd = ["taskset","-c",str(cpu),sys.executable,"-B","examples/run_sweep.py",
                        str(binary),str(k),str(path)]
-                if reference:
-                    cmd.append("--reference")
                 with (out/f"{path.name}.log").open("w") as log:
                     children.append(subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=log,
                                                      stderr=subprocess.STDOUT, start_new_session=True))
@@ -67,7 +65,7 @@ def main():
                         pass
                     child.wait()
         print(f"PASS {name} {time.monotonic()-start:.1f}s",flush=True)
-    print("COMPLETE: 12 optimized trials and 3 matched reference trials",flush=True)
+    print("COMPLETE: 12 optimized trials",flush=True)
 
 
 if __name__ == "__main__":

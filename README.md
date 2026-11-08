@@ -113,7 +113,7 @@ The window run requires exit status zero and the final line `PASS: checkpoint ve
 
 The [four profiles](parameters/sweep-profiles.json) share a 128-bit classical attack-cost target. The selection process requires all six generic Core-SVP estimates to reach 144 classical and 136 under quantum pricing. It also checks the CRT single-component cases and requires a statistical error of at most $2^{-130}$ over 16,384 issued attempts, including abandoned attempts. The quantum estimate describes lattice reduction costs. The knowledge theorem assumes a classically rewindable prover.
 
-The [batch driver](benchmarks/run_four_arities.py) runs three ordinary transitions at each arity and three with the original 1,024-input profile. Each transition uses fixed public input fixtures with one nonzero fresh residual and draws new verifier coins. It writes both byte streams, reconstructs the field and five backend layers from the public inputs, checks the pivot, and tests an altered commitment. The Linux command below uses three separate cores with distinct last-level caches. Replace the CPU IDs with IDs available on the measurement machine and choose fresh output directories.
+The [batch driver](benchmarks/run_four_arities.py) runs three ordinary transitions at each of the four optimized arities. Each transition uses fixed public input fixtures with one nonzero fresh residual and draws new verifier coins. It writes both byte streams, reconstructs the field and five backend layers from the public inputs, checks the pivot, and tests an altered commitment. The Linux command below uses three separate cores with distinct last-level caches. Replace the CPU IDs with IDs available on the measurement machine and choose fresh output directories.
 
 ```sh
 python3 parameters/sweep_profiles.py --check
@@ -121,11 +121,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target sonata_sweep
 python3 -B benchmarks/run_four_arities.py build/sonata_sweep runs --cpus 4 36 68
 sage -python parameters/estimate_sis.py /path/to/lattice-estimator parameters/sweep-profiles.json > sis-sweep.json
-sage -python parameters/estimate_sis.py /path/to/lattice-estimator parameters/ledger-two-point.json > sis-reference.json
-python3 -B benchmarks/summarize_four_arities.py runs sis-sweep.json sis-reference.json tables
+python3 -B benchmarks/summarize_four_arities.py runs sis-sweep.json tables
 ```
 
-The [summary script](benchmarks/summarize_four_arities.py) independently decodes each stream, checks message lengths against the issued retry sequence, and writes per-trial data, min/median/max summaries and a Markdown table. Prover and verifier times exclude shared CRS and input preparation. The verifier column includes issuing the coins and checking the decoded transcript without the witness. The table also reports the verification replay alone. Wire lengths include padding and retries, and peak RSS is the largest individual-process high-water mark across the three trials.
+The [summary script](benchmarks/summarize_four_arities.py) independently decodes each stream, checks lengths against the issued retry sequence, and writes per-trial and aggregate results, packed CRS sizes, and 24 attack-cost rows with MATZOV fit-range flags. Prover and verifier times exclude shared CRS and input preparation. The verifier column includes issuing the coins and checking the decoded transcript without the witness. The table also reports public replay alone and the complete wall time. Wire lengths include padding and retries, and peak RSS is the largest individual-process high-water mark across the three trials.
 
 ## Code
 
