@@ -1,5 +1,7 @@
 # Five-layer ordinary transitions
 
+AMD EPYC 7742 64-Core Processor (x86_64), Linux `5.15.0-161-generic`, Python 3.12.3. The three trials used logical CPUs 4, 36, 68.
+
 | Profile | Prover (s) | Verifier (s) | Public replay (s) | Wall (s) | P→V (B) | V→P (B) | Total (B) | Peak RSS (MiB) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | k16 | 19.737 | 18.071 | 18.036 | 37.912 | 106,775 | 36,390 | 143,165 | 86.65 |

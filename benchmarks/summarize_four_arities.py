@@ -143,6 +143,9 @@ def main():
     (out/"wire-checks.json").write_text(json.dumps(wires,indent=2)+"\n",encoding="utf-8")
     lines = ["# Five-layer ordinary transitions",
              "",
+             f"{machine['cpu']} ({machine['architecture']}), Linux `{machine['kernel']}`, "
+             f"Python {machine['python']}. The three trials used logical CPUs {', '.join(map(str, cpus))}.",
+             "",
              "| Profile | Prover (s) | Verifier (s) | Public replay (s) | Wall (s) | P→V (B) | V→P (B) | Total (B) | Peak RSS (MiB) |",
              "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for r in groups:

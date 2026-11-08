@@ -8,7 +8,9 @@ The repository provides C++17 prover and verifier code, a Python short-challenge
 
 ## Five-layer results
 
-Each ordinary transition starts from committed inputs, draws fresh verifier challenges, and completes four recursive reductions and the terminal pivot. The verifier reconstructs all five layers from public inputs and the decoded messages. Times are medians of three runs per arity on a shared AMD EPYC 7742.
+Each ordinary transition starts from committed inputs, draws fresh verifier challenges, and completes four recursive reductions and the terminal pivot. The verifier reconstructs all five layers from public inputs and the decoded messages. Times are medians of three runs per arity.
+
+**Measurement environment.** The shared server used AMD EPYC 7742 processors (x86-64), Ubuntu 24.04.4 LTS and Linux `5.15.0-161-generic`. The Release build used GCC 13.3.0, CMake 3.28.3 and `-O3 -DNDEBUG`. The verifier driver used Python 3.12.3. The container had a 200 GiB memory limit and a CPU time quota equivalent to 40 logical CPUs. Within each arity, the three trials ran concurrently, one each on logical CPUs 4, 36 and 68, on distinct physical cores with separate L3 caches.
 
 | Fresh inputs | Prover (s) | Verifier (s) | Wall (s) | Bidirectional transcript (B) | Peak RSS (MiB) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -17,7 +19,7 @@ Each ordinary transition starts from committed inputs, draws fresh verifier chal
 | 256 | 83.797 | 74.946 | 159.603 | 159,507 | 523.89 |
 | 1,024 | 258.324 | 226.150 | 487.709 | 170,361 | 2,014.43 |
 
-Trials at each arity ran concurrently on three separate physical cores. Bytes count the two encoded message streams with input commitments and CRS already shared. Peak RSS is the largest single-process high-water mark across the three trials. At 1,024 inputs the actual root commitment matrix has 16 rows and 4,733 columns, and the shared packed CRS occupies 29,079,552 B. [Full tables](benchmarks/results/experiment-table.md) · [Individual trials](benchmarks/results/trials.csv) · [Reproduction commands](#four-arity-ordinary-transition-experiment)
+Bytes count the two encoded message streams with input commitments and CRS already shared. Peak RSS is the largest single-process high-water mark across the three trials. At 1,024 inputs the actual root commitment matrix has 16 rows and 4,733 columns, and the shared packed CRS occupies 29,079,552 B. [Full tables](benchmarks/results/experiment-table.md) · [Individual trials](benchmarks/results/trials.csv) · [Reproduction commands](#four-arity-ordinary-transition-experiment)
 
 ## Checkpoint batching
 
@@ -52,7 +54,7 @@ The run checks acceptance of an honest window and rejection of an altered auxili
 
 ### Component benchmarks
 
-Each value below comes from five fresh processes on one pinned logical CPU of an Intel Core i9-13980HX under Ubuntu 24.04 / WSL2. Time is the median for the listed batch. Memory is the maximum whole-process peak RSS, including input preparation and runtime overhead.
+**Measurement environment.** The component benchmarks ran on an Intel Core i9-13980HX under Ubuntu 24.04 LTS on WSL2, kernel `6.18.33.2-microsoft-standard-WSL2`. The C++ kernels used GCC 13.3.0 with `-O3 -DNDEBUG -std=gnu++17`, and the short-challenge sampler used CPython 3.12.3. Each module ran sequentially in five fresh processes pinned to logical CPU 4, without a warm-up. Time is the median for the listed batch. Memory is the maximum whole-process peak RSS, including input preparation and runtime overhead.
 
 | Operation | Measured input | Time (ms) | Peak RSS (MiB) |
 | --- | --- | ---: | ---: |
