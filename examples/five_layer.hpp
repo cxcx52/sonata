@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sonata/backend.hpp"
+#include <chrono>
 #include <iostream>
 #include <string_view>
 
@@ -57,6 +58,7 @@ inline Aggregated prove_projection(const Config &cfg, const System &system,
     auto projection = expand_projection(cfg, coins.projection_seed);
     auto image = project(projection, w);
     if (proj_norm(image, cfg.S)) {
+      std::cerr << "projection_attempts=" << i + 1 << '\n';
       msg.image = std::move(image);
       coins.zeta = aggregation_coin(word);
       return aggregate(system, projection, msg.image, coins.zeta, one);
@@ -73,8 +75,10 @@ inline RV prove_response(const Config &cfg, const RV &w, const ChallengeSource &
     if (!cfg.rho)
       check(!rzero(coins.challenge.front()), "pivot challenge must be nonzero");
     auto z = response(w, coins.challenge, cfg.n);
-    if (energy(z) <= cfg.G)
+    if (energy(z) <= cfg.G) {
+      std::cerr << "short_challenge_attempts=" << i + 1 << '\n';
       return z;
+    }
   }
   throw std::runtime_error("short-response retry budget exhausted");
 }
@@ -221,8 +225,13 @@ inline void run_five_layers(System aligned_root, RV witness,
         "five-layer root shape");
   std::array<LayerMessages, 5> proof;
   std::array<LayerCoins, 5> tape;
+  const auto start = std::chrono::steady_clock::now();
   prove_layers(aligned_root, std::move(witness), crs, word, draw_challenges, proof, tape);
+  const auto proved = std::chrono::steady_clock::now();
   verify_layers(std::move(aligned_root), crs, proof, tape);
+  std::cerr << "backend_prove_seconds=" << std::chrono::duration<double>(proved-start).count()
+            << " backend_verify_and_tamper_seconds="
+            << std::chrono::duration<double>(std::chrono::steady_clock::now()-proved).count() << '\n';
 }
 
 } // namespace sonata::example

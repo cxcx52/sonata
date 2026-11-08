@@ -1,8 +1,9 @@
-"""Run the five-layer example with reproducible short-challenge coins."""
+"""Run one full-profile five-layer transition or checkpoint."""
 import argparse
 import os
 from pathlib import Path
 import random
+import secrets
 import subprocess
 import sys
 
@@ -19,10 +20,15 @@ def main():
     parser.add_argument("executable", type=Path, help="path to the built sonata_e2e")
     parser.add_argument("--run-full", action="store_true", required=True,
                         help="explicitly start the full-size computation")
+    parser.add_argument("--transition", action="store_true",
+                        help="run the ordinary 1024-source transition with fresh verifier coins")
     args = parser.parse_args()
 
     rng = random.Random(0x534F4E415441)
     requests = {(blocks, int(radix is None)) for blocks, radix in PATH}
+    if args.transition:
+        success = "PASS: ordinary transition verified through five layers and altered pivot rejected"
+        return serve_verifier(args.executable, "--transition", requests, secrets.randbits, success)
     return serve_verifier(args.executable, "--run-full", requests, rng.getrandbits, SUCCESS)
 
 

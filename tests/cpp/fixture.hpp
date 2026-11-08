@@ -44,11 +44,12 @@ struct Fixture {
   E lconst{}, rho{}, gamma{}, eta{}, pending{}, linear{};
   size_t constraints = 0;
   int invalid_sources = 0;
-  Fixture(int kk, U seed, bool invalid = false,
-          const State *old_state = nullptr)
-      : k(kk), states(kk + 2), gmap((kk + 2) * 73) {
+  explicit Fixture(int kk) : k(kk), states(kk + 2), gmap((kk + 2) * 73) {
     for (auto &a : gmap)
       a.fill(-1);
+  }
+  Fixture(int kk, U seed, bool invalid = false,
+          const State *old_state = nullptr) : Fixture(kk) {
     std::mt19937_64 rng(seed);
     for (int s = 0; s <= k; ++s)
       states[s] = input_state(rng, s != 0);
@@ -61,7 +62,20 @@ struct Fixture {
     // gamma.
     if (invalid)
       states[1][1][0] = add(states[1][1][0], 1);
-    E alpha{U(k + 17), 3, 4, 5};
+    encode_fold(E{U(k + 17), 3, 4, 5});
+    gamma = randomE(rng);
+    if (gamma == zero)
+      gamma = one;
+    rho = randomE(rng);
+    if (rho == zero)
+      rho = one;
+    eta = randomE(rng);
+    if (eta == zero)
+      eta = one;
+    batch_equations();
+  }
+  void encode_fold(E alpha) {
+    check(weights.empty(), "fold already encoded");
     weights.resize(k);
     E power = one;
     for (int i = 0; i < k; i++) {
@@ -101,18 +115,10 @@ struct Fixture {
       auto group = canonical_group(scalarvalues[g]);
       std::copy(group.begin(), group.end(), bits.begin() + 55 * g);
     }
-    // Challenge chronology: source commitments -> gamma -> pending claim ->
-    // rho, eta. A real adversarial-security proof must bind source openings
-    // before gamma.
-    gamma = randomE(rng);
-    if (gamma == zero)
-      gamma = one;
-    rho = randomE(rng);
-    if (rho == zero)
-      rho = one;
-    eta = randomE(rng);
-    if (eta == zero)
-      eta = one;
+  }
+  void batch_equations() {
+    check(!bits.empty() && products.empty(), "expected one encoded fold");
+    check(gamma != zero && rho != zero && eta != zero, "nonzero verifier challenges");
     E fresh_power = one, strict_power = one;
     auto next = [&](bool fresh) {
       constraints++;

@@ -27,6 +27,14 @@ Both variants use the same interactive messages. The terminal-call coefficient b
 
 Run `python parameters/audit_profile.py` for an independent reconstruction of both ledgers, including the short-challenge support, balanced-digit norm bounds, six representative Module-SIS instances, and per-layer communication. The packed backend messages total 166,136 bytes with no retries. Settling the eight-step window below adds 3,192 bytes for the field exchange and auxiliary commitment when the verifier already holds the public log. These are encoding budgets.
 
+The [attack estimator driver](parameters/estimate_sis.py) checks all six representatives against the nonzero-modulo-$q$ kernel condition and their Euclidean radii. It runs the coefficient-lattice model of the pinned [Lattice Estimator](https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84) and reports the BKZ block sizes, cost-model sensitivity, and a separate single-CRT-component screen. Use SageMath 10.9 and a clean checkout at that commit to reproduce the estimates.
+
+```sh
+sage -python parameters/estimate_sis.py /path/to/lattice-estimator parameters/ledger-two-point.json
+```
+
+The smallest classical Core-SVP estimate among the six generic models is 142.8 in log₂ work units ($A_1$, block size 489). Bounding the protocol failure probability also requires six time-bounded success probabilities and the history extractor's cutoff loss.
+
 ## Checkpoint batching
 
 A verifier can freeze a window of consecutive transitions and submit one root statement to the backend. The [field session](include/sonata/epoch_session.hpp) takes its own copy of the window before issuing the batching challenges. The outer verifier supplies fresh randomness, shares the attempt budget across retries, and accepts the checkpoint only after the backend accepts the statement.
@@ -82,7 +90,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target sonata_e2e
 ```
 
-The target is excluded from the default build and CTest. The root projection alone stores 384 × 3,635,520 one-byte coefficients (1.30 GiB). Allow additional memory for the witness, commitments, and aggregation. Peak memory and elapsed time for the full run have yet to be measured.
+The target is excluded from the default build and CTest. The root projection alone stores 384 × 3,635,520 one-byte coefficients (1.30 GiB). Allow additional memory for the witness, commitments, and aggregation. The output includes the public replay of all five layers and one deliberately altered terminal commitment.
 
 On a machine reserved for the full run, start the [Python driver](examples/run_e2e.py) from the repository root. It supplies the spectrally filtered ring challenges to the C++ executable.
 
@@ -90,7 +98,16 @@ On a machine reserved for the full run, start the [Python driver](examples/run_e
 python3 examples/run_e2e.py ./build/sonata_e2e --run-full
 ```
 
-Success requires exit status zero and the final line `PASS: checkpoint verified through five layers and altered pivot rejected`. This exercises one honest interactive execution and one tampered terminal message. Knowledge extraction has a separate parameter ledger and local tests.
+For one ordinary transition with 1,024 fresh instances, add `--transition`. This mode draws fresh verifier coins and uses a source with one nonzero residual to exercise the pending update. To collect wall time, the largest child process RSS high-water mark, and process-tree RSS samples on Linux, use a new output directory for each run.
+
+```sh
+python3 benchmarks/full_profile.py transition ./build/sonata_e2e transition-results
+python3 benchmarks/full_profile.py window ./build/sonata_e2e window-results
+```
+
+On an AMD EPYC 7742 with a Release build, one complete ordinary run took 523.79 s (2.062 GiB largest-process peak RSS); the deterministic checkpoint run took 524.78 s (1.632 GiB). These are separate local-message harness measurements covering proof creation, public verification and a negative pivot check.
+
+The window run requires exit status zero and the final line `PASS: checkpoint verified through five layers and altered pivot rejected`. This exercises one honest interactive execution and one tampered terminal message. Knowledge extraction has a separate parameter ledger and local tests.
 
 ## Code
 
