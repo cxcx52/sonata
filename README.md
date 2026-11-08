@@ -90,14 +90,21 @@ The window run requires exit status zero and the final line `PASS: checkpoint ve
 
 The four profiles share a 128-bit classical attack-cost target. All six generic Core-SVP estimates must reach 144 under classical pricing and 136 under quantum pricing. The audit also checks single-CRT-component attacks and requires a statistical error of at most $2^{-130}$ over 16,384 issued attempts, including abandoned attempts. Quantum pricing describes the cost of lattice reduction. The classical knowledge theorem retains a global extraction cutoff and six time-bounded Module-SIS advantages. [Parameter ledger](parameters/sweep-profiles.json) · [Attack estimates and MATZOV fit ranges](benchmarks/results/attacks.csv)
 
-The batch driver uses fixed public input fixtures with one nonzero fresh residual and tests rejection of an altered pivot commitment in every run. Use Python 3.11 or later for the parameter audit and benchmark scripts. For the attack estimates, use SageMath 10.9 and a clean Lattice Estimator checkout at the pinned revision. Replace the CPU IDs below with three available cores with distinct last-level caches and choose fresh output directories. [Batch driver](benchmarks/run_four_arities.py) · [Pinned Lattice Estimator](https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84)
+The batch driver uses fixed public input fixtures with one nonzero fresh residual and tests rejection of an altered pivot commitment in every run. Use Python 3.11 or later for the parameter audit and benchmark scripts. Replace the CPU IDs below with three available cores with distinct last-level caches and choose fresh output directories. [Batch driver](benchmarks/run_four_arities.py)
+
+The attack estimates use SageMath 10.9 and the Euclidean SIS model in Lattice Estimator. The `lattice-estimator/` submodule pins commit `53da598`, the revision used for all 24 estimates. The driver checks the full commit hash and records it in `sis-sweep.json`. [Lattice Estimator source at the measured revision](https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84)
+
+**Lattice Estimator citation**
+
+Martin R. Albrecht, Rachel Player, and Sam Scott. “On the concrete hardness of Learning with Errors.” *Journal of Mathematical Cryptology* 9(3), 169–203 (2015). [DOI](https://doi.org/10.1515/jmc-2015-0016) · [ePrint](https://eprint.iacr.org/2015/046)
 
 ```sh
 python3 parameters/sweep_profiles.py --check
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target sonata_sweep
 python3 -B benchmarks/run_four_arities.py build/sonata_sweep runs --cpus 4 36 68
-sage -python parameters/estimate_sis.py /path/to/lattice-estimator parameters/sweep-profiles.json > sis-sweep.json
+git submodule update --init -- lattice-estimator
+sage -python parameters/estimate_sis.py ./lattice-estimator parameters/sweep-profiles.json > sis-sweep.json
 python3 -B benchmarks/summarize_four_arities.py runs sis-sweep.json tables
 ```
 
