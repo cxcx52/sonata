@@ -4,36 +4,20 @@
 
 Sonata folds an accumulator and a batch of fresh lattice instances into a new accumulator. Each transition checks the old and new state equations and records a weighted sum of the fresh residuals in a public field element. In a sequence of authenticated transitions, a final zero-pending decision checks the outstanding residuals.
 
-The repository provides C++17 kernels for the interactive relations, Python routines for short challenges and local extraction, and audited five-layer profiles for batches of 16, 64, 256 and 1,024 fresh instances.
+The repository provides C++17 prover and verifier code, a Python short-challenge sampler and audited five-layer profiles for batches of 16, 64, 256 and 1,024 fresh instances. The knowledge analysis uses labelled two-point extraction against a classically rewindable prover.
 
-## Reproduce the parameters
+## Five-layer results
 
-From the repository root, run the following with Python 3.11 or later. The calculator uses only the standard library.
+Each ordinary transition starts from committed inputs, draws fresh verifier challenges, and completes four recursive reductions and the terminal pivot. The verifier reconstructs all five layers from public inputs and the decoded messages. Times are medians of three runs per arity on a shared AMD EPYC 7742.
 
-```sh
-python parameters/compute.py --points 2 --check
-python parameters/compute.py --points 3 --check
-```
+| Fresh inputs | Prover (s) | Verifier (s) | Wall (s) | Bidirectional transcript (B) | Peak RSS (MiB) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 16 | 19.737 | 18.071 | 37.912 | 143,165 | 86.65 |
+| 64 | 34.227 | 31.068 | 65.544 | 149,246 | 167.50 |
+| 256 | 83.797 | 74.946 | 159.603 | 159,507 | 523.89 |
+| 1,024 | 258.324 | 226.150 | 487.709 | 170,361 | 2,014.43 |
 
-Each command checks the full five-layer calculation against its committed JSON file. Omit `--check` to print the dimensions, norm bounds and exact statistical error terms.
-
-| Original 1,024-input profile | Two-point extraction | Three-point extraction |
-| --- | ---: | ---: |
-| Zero-pending statistical knowledge error, −log₂(bound) | 144.18 | 144.18 |
-| Upper-bound coefficient on expected terminal calls | 2,276,736 | 53,717,664 |
-| Parameters | [Two-point ledger](parameters/ledger-two-point.json) | [Three-point ledger](parameters/ledger.json) |
-
-Both variants use the same interactive messages. The terminal-call coefficient bounds work in the extractor. Concrete computational security also depends on the Module-SIS instances and the global extraction time limit.
-
-Run `python parameters/audit_profile.py` for an independent reconstruction of both ledgers, including the short-challenge support, balanced-digit norm bounds, six representative Module-SIS instances, and per-layer communication. The packed backend messages total 166,136 bytes with no retries. Settling the eight-step window below adds 3,192 bytes for the field exchange and auxiliary commitment when the verifier already holds the public log. These are encoding budgets.
-
-The [attack estimator driver](parameters/estimate_sis.py) checks all six representatives against the nonzero-modulo-$q$ kernel condition and their Euclidean radii. It runs the coefficient-lattice model of the pinned [Lattice Estimator](https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84) and reports the BKZ block sizes, cost-model sensitivity, and a separate single-CRT-component screen. Use SageMath 10.9 and a clean checkout at that commit to reproduce the estimates.
-
-```sh
-sage -python parameters/estimate_sis.py /path/to/lattice-estimator parameters/ledger-two-point.json
-```
-
-For the original 1,024-input profile, the smallest classical Core-SVP estimate among the six generic models is 142.8 in log₂ work units ($A_1$, block size 489). Bounding the protocol failure probability also requires six time-bounded success probabilities and the history extractor's cutoff loss.
+Trials at each arity ran concurrently on three separate physical cores. Bytes count the two encoded message streams with input commitments and CRS already shared. Peak RSS is the largest single-process high-water mark across the three trials. At 1,024 inputs the actual root commitment matrix has 16 rows and 4,733 columns, and the shared packed CRS occupies 29,079,552 B. [Full tables](benchmarks/results/experiment-table.md) · [Individual trials](benchmarks/results/trials.csv) · [Reproduction commands](#four-arity-ordinary-transition-experiment)
 
 ## Checkpoint batching
 
@@ -79,7 +63,7 @@ Each value below comes from five fresh processes on one pinned logical CPU of an
 
 Build with `cmake --build build --target sonata_bench` and run `python3 benchmarks/run.py ./build/sonata_bench` on Linux with GNU time. The [benchmark driver](benchmarks/run.py) emits individual samples and the machine configuration as JSON.
 
-### Manual end-to-end example
+### Manual checkpoint example
 
 The [full-profile example](examples/end_to_end.cpp) starts from a trusted fixture state and constructs eight linked transitions containing 994 fresh instances. The initial and final pending values are zero. It freezes the window, runs the field Sumcheck, and passes the resulting root and opening through four recursive reductions and the terminal pivot. A separate verifier reconstructs the backend relations from the public root, messages, and its saved challenges. It checks the honest pivot, then changes one commitment coefficient and checks for rejection. The fixture uses deterministic verifier coins for reproducibility.
 
@@ -98,22 +82,13 @@ On a machine reserved for the full run, start the [Python driver](examples/run_e
 python3 examples/run_e2e.py ./build/sonata_e2e --run-full
 ```
 
-For one ordinary transition with 1,024 fresh instances, add `--transition`. This mode draws fresh verifier coins and uses a source with one nonzero residual to exercise the pending update. To collect wall time, the largest child process RSS high-water mark, and process-tree RSS samples on Linux, use a new output directory for each run.
-
-```sh
-python3 benchmarks/full_profile.py transition ./build/sonata_e2e transition-results
-python3 benchmarks/full_profile.py window ./build/sonata_e2e window-results
-```
-
-On an AMD EPYC 7742 with a Release build, one complete ordinary run took 523.79 s (2.062 GiB largest-process peak RSS); the deterministic checkpoint run took 524.78 s (1.632 GiB). These are separate local-message harness measurements covering proof creation, public verification and a negative pivot check.
-
-The window run requires exit status zero and the final line `PASS: checkpoint verified through five layers and altered pivot rejected`. This exercises one honest interactive execution and one tampered terminal message. Knowledge extraction has a separate parameter ledger and local tests.
+The window run requires exit status zero and the final line `PASS: checkpoint verified through five layers and altered pivot rejected`. To record the wall time and peak RSS for this fixture, run `python3 benchmarks/full_profile.py window ./build/sonata_e2e window-results` with a new output directory.
 
 ### Four-arity ordinary-transition experiment
 
-The [four profiles](parameters/sweep-profiles.json) share a 128-bit classical attack-cost target. The selection process requires all six generic Core-SVP estimates to reach 144 classical and 136 under quantum pricing. It also checks the CRT single-component cases and requires a statistical error of at most $2^{-130}$ over 16,384 issued attempts, including abandoned attempts. The quantum estimate describes lattice reduction costs. The knowledge theorem assumes a classically rewindable prover.
+The four profiles share a 128-bit classical attack-cost target. All six generic Core-SVP estimates must reach 144 under classical pricing and 136 under quantum pricing. The audit also checks single-CRT-component attacks and requires a statistical error of at most $2^{-130}$ over 16,384 issued attempts, including abandoned attempts. Quantum pricing describes the cost of lattice reduction. The classical knowledge theorem retains a global extraction cutoff and six time-bounded Module-SIS advantages. [Parameter ledger](parameters/sweep-profiles.json) · [Attack estimates and MATZOV fit ranges](benchmarks/results/attacks.csv)
 
-The [batch driver](benchmarks/run_four_arities.py) runs three ordinary transitions at each of the four optimized arities. Each transition uses fixed public input fixtures with one nonzero fresh residual and draws new verifier coins. It writes both byte streams, reconstructs the field and five backend layers from the public inputs, checks the pivot, and tests an altered commitment. The Linux command below uses three separate cores with distinct last-level caches. Replace the CPU IDs with IDs available on the measurement machine and choose fresh output directories.
+The batch driver uses fixed public input fixtures with one nonzero fresh residual and tests rejection of an altered pivot commitment in every run. Use Python 3.11 or later for the parameter audit and benchmark scripts. For the attack estimates, use SageMath 10.9 and a clean Lattice Estimator checkout at the pinned revision. Replace the CPU IDs below with three available cores with distinct last-level caches and choose fresh output directories. [Batch driver](benchmarks/run_four_arities.py) · [Pinned Lattice Estimator](https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84)
 
 ```sh
 python3 parameters/sweep_profiles.py --check
@@ -134,9 +109,6 @@ The [summary script](benchmarks/summarize_four_arities.py) independently decodes
 | Pending transition and Sumcheck endpoint | [frontend.hpp](include/sonata/frontend.hpp) |
 | Seeded projection, four-coordinate aggregation, child and pivot checks | [backend.hpp](include/sonata/backend.hpp) |
 | Short-challenge sampler and codec | [ball_challenges.py](extraction/ball_challenges.py) |
-| Local slope recovery and short-kernel comparison from three authenticated records | [coordinate.py](extraction/coordinate.py) |
-
-Run `python -m unittest discover -s tests/python` to check the Python coordinate routines.
 
 ## Origins
 

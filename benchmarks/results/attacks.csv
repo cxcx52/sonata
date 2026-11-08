@@ -1,0 +1,25 @@
+k,role,ring_rows,ring_columns,l2_radius,bkz_block,core_classical,core_quantum,matzov_classical,matzov_quantum_dw,matzov_fit,crt_screen,crt_block,crt_block_in_matzov_range
+16,A_aux,4,219,1658,1359,396.828,360.135,411.115293,378.509081,extrapolated (block > 1024),impossible by integer norm,,
+16,B_pivot,2,256,1024,647,188.924,171.455,210.86376,198.317273,within range,impossible by integer norm,,
+16,A_0,16,337,1306281810,536,156.512,142.04,182.13016,172.695283,within range,no feasible GSA block size through 21568,,
+16,D_0,6,448,98126,729,212.868,193.185,235.130501,220.281698,within range,impossible by integer norm,,
+16,A_1,16,361,1333281192,535,156.22,141.775,181.85051,172.443636,within range,GSA screen gives a finite fit,20566,False
+16,D_1,6,448,100154,726,211.992,192.39,234.291095,219.526571,within range,impossible by integer norm,,
+64,A_aux,4,508,2852,1131,330.252,299.715,347.177072,321.008625,extrapolated (block > 1024),impossible by integer norm,,
+64,B_pivot,2,256,1024,647,188.924,171.455,210.86376,198.317273,within range,impossible by integer norm,,
+64,A_0,16,665,1759232804,516,150.672,136.74,176.545637,167.670715,within range,GSA screen gives a finite fit,12624,False
+64,D_0,6,672,132150,680,198.56,180.2,221.432735,207.960045,within range,impossible by integer norm,,
+64,A_1,16,648,1515546845,526,153.592,139.39,179.337628,170.182757,within range,GSA screen gives a finite fit,15532,False
+64,D_1,6,448,113845,704,205.568,186.56,228.140716,213.994134,within range,impossible by integer norm,,
+256,A_aux,4,1852,5446,921,268.932,244.065,288.359953,268.110644,within range,impossible by integer norm,,
+256,B_pivot,2,256,1024,647,188.924,171.455,210.86376,198.317273,within range,impossible by integer norm,,
+256,A_0,16,1819,656411926,588,171.696,155.82,196.65459,185.762795,within range,no feasible GSA block size through 65536,,
+256,D_0,6,1152,98608,728,212.576,192.92,234.851018,220.030307,within range,impossible by integer norm,,
+256,A_1,16,969,536820017,605,176.66,160.325,201.404314,190.035915,within range,no feasible GSA block size through 62016,,
+256,D_1,6,768,80643,764,223.088,202.46,244.917727,229.085407,within range,impossible by integer norm,,
+1024,A_aux,4,7228,10760,751,219.292,199.015,240.815969,225.349009,within range,impossible by integer norm,,
+1024,B_pivot,2,256,1024,647,188.924,171.455,210.86376,198.317273,within range,impossible by integer norm,,
+1024,A_0,16,4733,972750044,558,162.936,147.87,188.273148,178.222059,within range,no feasible GSA block size through 65536,,
+1024,D_0,6,2496,146129,665,194.18,176.225,217.240982,204.189353,within range,impossible by integer norm,,
+1024,A_1,16,1688,692007305,584,170.528,154.76,195.536566,184.756892,within range,no feasible GSA block size through 65536,,
+1024,D_1,6,1152,103955,719,209.948,190.535,232.333905,217.76602,within range,impossible by integer norm,,
