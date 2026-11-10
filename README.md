@@ -64,7 +64,7 @@ The run checks acceptance of an honest window and rejection of an altered auxili
 
 ### Component benchmarks
 
-**Measurement environment.** The component benchmarks ran on an Intel Core i9-13980HX under Ubuntu 24.04 LTS on WSL2, kernel `6.18.33.2-microsoft-standard-WSL2`. The C++ kernels used GCC 13.3.0 with `-O3 -DNDEBUG -std=gnu++17`, and the short-challenge sampler used CPython 3.12.3. Each module ran sequentially in five fresh processes pinned to logical CPU 4, without a warm-up. Time is the median for the listed batch. Memory is the maximum whole-process peak RSS, including input preparation and runtime overhead.
+For the component measurements, each module ran sequentially in five fresh processes, without a warm-up. Time is the median for the listed batch. Memory is the maximum whole-process peak RSS, including input preparation and runtime overhead.
 
 | Operation | Measured input | Time (ms) | Peak RSS (MiB) |
 | --- | --- | ---: | ---: |
