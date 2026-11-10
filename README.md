@@ -6,6 +6,16 @@ Sonata folds an accumulator and a batch of fresh lattice instances into a new ac
 
 The repository provides C++17 prover and verifier code, a Python short-challenge sampler and audited five-layer profiles for batches of 16, 64, 256 and 1,024 fresh instances. The knowledge analysis uses labelled two-point extraction against a classically rewindable prover.
 
+## Labelled two-point extraction
+
+Recovering a candidate from two responses also appears in [LatticeFold](https://eprint.iacr.org/2024/257). Sonata analyzes this recovery step for a recursive short-opening backend with challenge-dependent quadratic auxiliary claims. Two accepting points recover a block candidate, but by themselves cannot establish a quadratic identity. The analysis handles adaptive responses through three comparisons:
+
+- Conflicting short openings of the same auxiliary tag yield a short commitment kernel.
+- Different block candidates across independent contexts yield a short kernel by cross-multiplying their response differences and challenge differences.
+- Matching labels and the same invalid candidate are handled by labelled bad-slope counting, jointly accounting for a uniform center and its first effective coordinate fork.
+
+The contexts share the pre-projection tag $u_1$. Each context draws fresh projection and aggregation randomness and fixes its own auxiliary tag $u_2$ for its coordinate forks. Acceptance-weighted comparison composes these cases through the recursive layers, with explicit knowledge-error and expected-work bounds. Successful extraction must explain the retained first real execution. These mechanisms provide Sonata's extract-or-Module-SIS guarantee for canonical re-encoding and prescribed-fold consistency.
+
 ## Five-layer results
 
 Each ordinary transition starts from committed inputs, draws fresh verifier challenges, and completes four recursive reductions and the terminal pivot. The verifier reconstructs all five layers from public inputs and the decoded messages. Times are medians of three runs per arity.
@@ -119,10 +129,10 @@ The [summary script](benchmarks/summarize_four_arities.py) independently decodes
 | Seeded projection, four-coordinate aggregation, child and pivot checks | [backend.hpp](include/sonata/backend.hpp) |
 | Short-challenge sampler and codec | [ball_challenges.py](extraction/ball_challenges.py) |
 
-## Origins
+## Paper history
 
-Building on CauchyFold and an unpublished internal study of knowledge extraction, Sonata combines pending-residual folding with a two-point extractor.
+Sonata is a substantially revised replacement of the author's earlier preprint, originally titled CauchyFold. The Sonata manuscript supersedes that draft under the same [Cryptology ePrint record, 2026/2011](https://eprint.iacr.org/2026/2011). CauchyFold identifies the former title and version of this same work; references to it here document the revision history.
 
-The original CauchyFold code, parameters, paper citation and MIT license are preserved together. To reproduce its results, start in [archive/cauchyfold](archive/cauchyfold/README.md).
+The superseded version's code, parameters and MIT license are retained in [archive/cauchyfold](archive/cauchyfold/README.md) for historical reproducibility.
 
 I would be grateful to anyone who helps carry out the remaining experiments or shares feedback on Sonata.
